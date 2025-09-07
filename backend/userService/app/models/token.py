@@ -11,3 +11,6 @@ class TokenData(BaseModel):
     """Data stored in token"""
     user_id: str
     user_name: str
+
+class LogoutRequest(BaseModel):
+    refresh_token: str

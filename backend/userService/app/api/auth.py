@@ -1,5 +1,7 @@
 from fastapi import APIRouter, HTTPException
+from app.db.database import get_db
 from app.models.user import UserRegister, UserLogin
+from app.models.token import LogoutRequest
 from app.services import auth_service
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -44,18 +46,18 @@ async def login(login_data: UserLogin):
     }
 
 @router.post("/logout")
-async def logout(refresh_token: str):
+async def logout(request: LogoutRequest):
     """
     Logout user by revoking refresh token
     """
-    db = auth_service.get_db()
+    """Logout by revoking refresh token"""
+    db = get_db()
     
-    # Revoke the refresh token
     result = db.table('refresh_tokens').update({
         "revoked": True
-    }).eq('token', refresh_token).execute()
+    }).eq('token', request.refresh_token).execute()
     
     if not result.data:
-        raise HTTPException(status_code=400, detail="Invalid token")
+        raise HTTPException(status_code=400, detail="Invalid or already revoked token")
     
     return {"message": "Successfully logged out"}
