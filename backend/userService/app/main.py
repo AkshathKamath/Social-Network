@@ -1,10 +1,11 @@
 from fastapi import FastAPI
-from app.api import auth
+from app.api import auth, users
 
 app = FastAPI(title="User Service", version="1.0.0")
 
 # Include the auth router
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(users.router, prefix="/api/v1")
 
 @app.get("/")
 def root():
