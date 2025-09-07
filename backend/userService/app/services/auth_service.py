@@ -1,7 +1,8 @@
 from app.db.database import get_db
-from app.core.security import hash_password, verify_password
+from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token
 from app.models.user import UserRegister, UserLogin
 from typing import Optional, Dict
+from datetime import datetime, timedelta, timezone
 
 def register_user(user_data: UserRegister) -> Dict:
     """Register a new user"""
@@ -43,6 +44,31 @@ def login_user(login_data: UserLogin) -> Optional[Dict]:
     if not verify_password(login_data.password, user['password_hash']):
         return None  # Wrong password
     
-    # Remove sensitive data before returning
+    token_data = {
+            "user_id": user['id'],
+            "user_name": user['user_name']
+        }
+        
+        # Generate tokens
+    access_token = create_access_token(token_data)
+    refresh_token = create_refresh_token(token_data)
+    
+    # Store refresh token in database
+    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    
+    db.table('refresh_tokens').insert({
+        "user_id": user['id'],
+        "token": refresh_token,
+        "expires_at": expires_at.isoformat()
+    }).execute()
+    
+    # Remove sensitive data
     user.pop('password_hash', None)
-    return user
+    
+    # Return tokens and user info
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": user
+    }
