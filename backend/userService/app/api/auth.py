@@ -12,7 +12,9 @@ async def register(user_data: UserRegister):
         return {
             "message": "User registered successfully",
             "user_id": user['id'],
-            "email": user['email']
+            "email": user['email'],
+            "user_name": user['user_name'],
+            "full_name": user['full_name']
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -35,6 +37,7 @@ async def login(login_data: UserLogin):
         "user": {
             "id": user['id'],
             "email": user['email'],
-            "full_name": user['full_name']
+            "user_name": user['user_name'],
+            "full_name": user['full_name'],
         }
     }
