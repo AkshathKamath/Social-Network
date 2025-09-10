@@ -1,29 +1,24 @@
 from fastapi import APIRouter, HTTPException
 from app.db.database import get_db
-from app.models.user import UserRegister, UserLogin
-from app.models.token import Token, RefreshToken
+from app.models.user import User, UserRegister, UserLogin
+from app.models.token import Token, RefreshToken, LogoutMessage
 from app.services import auth_service
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
-@router.post("/register")
+## /register
+@router.post("/register", response_model=User)
 async def register(user_data: UserRegister):
     """Register a new user"""
     try:
-        user = auth_service.register_user(user_data)
-        return {
-            "message": "User registered successfully",
-            "user_id": user['id'],
-            "email": user['email'],
-            "user_name": user['user_name'],
-            "full_name": user['full_name']
-        }
+        return auth_service.register_user(user_data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail="Registration failed")
 
-@router.post("/login")
+## /login
+@router.post("/login", response_model=User)
 async def login(login_data: UserLogin):
     """Login user"""
     result = auth_service.login_user(login_data)
@@ -33,19 +28,10 @@ async def login(login_data: UserLogin):
             status_code=401, 
             detail="Invalid email or password"
         )
-    
-    return {
-        "access_token": result['access_token'],
-        "refresh_token": result['refresh_token'],
-        "token_type": result['token_type'],
-        "user": {
-            "id": result['user']['id'],
-            "email": result['user']['email'],
-            "full_name": result['user']['full_name']
-        }
-    }
+    return result
 
-@router.post("/logout")
+## /logout
+@router.post("/logout", response_model=LogoutMessage)
 async def logout(request: RefreshToken):
     """
     Logout user by revoking refresh token
@@ -57,12 +43,9 @@ async def logout(request: RefreshToken):
             status_code=401, 
             detail="Invalid Refresh token"
         )
+    return result
 
-    return {
-        "user": result['user_id'],
-        "message": "Logged Out Successfully"
-    }
-
+## /refresh
 @router.post("/refresh", response_model=Token)
 async def refresh_token(request: RefreshToken):
     """Create new access token by sending the refresh token"""

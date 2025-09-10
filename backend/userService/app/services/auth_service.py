@@ -1,11 +1,11 @@
 from app.db.database import get_db
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token
-from app.models.user import UserRegister, UserLogin
-from app.models.token import Token, RefreshToken
+from app.models.user import UserRegister, UserLogin, User
+from app.models.token import Token, RefreshToken, LogoutMessage
 from typing import Optional, Dict
 from datetime import datetime, timedelta, timezone
 
-def register_user(user_data: UserRegister) -> Dict:
+def register_user(user_data: UserRegister) -> User:
     """Register a new user"""
     db = get_db()
     
@@ -24,12 +24,15 @@ def register_user(user_data: UserRegister) -> Dict:
     
     if result.data:
         user = result.data[0]
-        user.pop('password_hash', None)  # Don't return password hash
-        return user
+        return User(
+            email=user['email'],
+            full_name=user['full_name'],
+            user_name=user['user_name']
+        )
     
     raise Exception("Failed to create user")
 
-def login_user(login_data: UserLogin) -> Optional[Dict]:
+def login_user(login_data: UserLogin) -> User:
     """Authenticate user and return user data if successful"""
     db = get_db()
     
@@ -67,14 +70,15 @@ def login_user(login_data: UserLogin) -> Optional[Dict]:
     user.pop('password_hash', None)
     
     # Return tokens and user info
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer",
-        "user": user
-    }
+    return User(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        email=user['email'],
+        full_name=user['full_name'],
+        user_name=user['user_name']
+    )
 
-def logout_user(request: RefreshToken):
+def logout_user(request: RefreshToken) -> LogoutMessage:
     """Logout user by revoking refresh token"""
     db = get_db()
 
@@ -88,9 +92,9 @@ def logout_user(request: RefreshToken):
     if not result.data:
         raise ValueError("User already logged out")
     
-    return {
-        "user_id": user
-    }
+    return LogoutMessage(
+        message=f"User {user['user_id']} logged out successfully"
+    )
 
 def refresh_token(request: RefreshToken) -> Token:
     """Get new access token using stored refresh token"""
@@ -122,5 +126,6 @@ def refresh_token(request: RefreshToken) -> Token:
 
     return Token(
         access_token=new_access_token,
+        refresh_token=request.refresh_token,
         token_type="bearer"
     )

@@ -14,3 +14,6 @@ class TokenData(BaseModel):
 
 class RefreshToken(BaseModel):
     refresh_token: str
+
+class LogoutMessage(BaseModel):
+    message: str
