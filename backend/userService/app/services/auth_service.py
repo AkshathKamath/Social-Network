@@ -1,6 +1,7 @@
 from app.db.database import get_db
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token
 from app.models.user import UserRegister, UserLogin
+from app.models.token import RefreshToken
 from typing import Optional, Dict
 from datetime import datetime, timedelta, timezone
 
@@ -72,3 +73,22 @@ def login_user(login_data: UserLogin) -> Optional[Dict]:
         "token_type": "bearer",
         "user": user
     }
+
+def logout_user(request: RefreshToken):
+    """Logout user by revoking refresh token"""
+    db = get_db()
+
+    result = db.table('refresh_tokens').update({
+        "revoked": True
+    }).eq('token', request.refresh_token).execute()
+
+    user = db.table('refresh_tokens').select("user_id").eq('token', request.refresh_token).execute()
+    user = user.data[0]
+
+    if not result.data:
+        raise ValueError("User already logged out")
+    
+    return {
+        "user_id": user
+    }
+    

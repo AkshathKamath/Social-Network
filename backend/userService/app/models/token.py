@@ -12,5 +12,5 @@ class TokenData(BaseModel):
     user_id: str
     user_name: str
 
-class LogoutRequest(BaseModel):
+class RefreshToken(BaseModel):
     refresh_token: str
