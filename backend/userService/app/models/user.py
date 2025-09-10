@@ -14,9 +14,3 @@ class UserRegister(BaseModel):
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
-
-class UserResponse(BaseModel):
-    id: UUID
-    email: str
-    full_name: str
-    created_at: str

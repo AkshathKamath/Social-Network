@@ -1,7 +1,7 @@
 from app.db.database import get_db
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token
 from app.models.user import UserRegister, UserLogin
-from app.models.token import RefreshToken
+from app.models.token import Token, RefreshToken
 from typing import Optional, Dict
 from datetime import datetime, timedelta, timezone
 
@@ -91,4 +91,36 @@ def logout_user(request: RefreshToken):
     return {
         "user_id": user
     }
+
+def refresh_token(request: RefreshToken) -> Token:
+    """Get new access token using stored refresh token"""
+    db = get_db()
+
+    result = db.table('refresh_tokens').select("*").eq('token', request.refresh_token).eq('revoked', False).execute()
+
+    if not result.data:
+        raise ValueError("Invalid refresh token")
     
+    token_data = result.data[0]
+
+    expires_at = datetime.fromisoformat(token_data['expires_at'].replace('Z', '+00:00'))
+    if expires_at < datetime.now(timezone.utc):
+        raise ValueError("Refresh token expired")
+    
+    user_result = db.table('users').select("id, user_name").eq('id', token_data['user_id']).execute()
+    if not user_result.data:
+        raise ValueError("User not found")
+    
+    user = user_result.data[0]
+
+    new_token_data = {
+        "user_id": user['id'],
+        "user_name": user['user_name'] 
+    }
+
+    new_access_token = create_access_token(new_token_data)
+
+    return Token(
+        access_token=new_access_token,
+        token_type="bearer"
+    )

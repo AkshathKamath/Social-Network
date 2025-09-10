@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from app.db.database import get_db
 from app.models.user import UserRegister, UserLogin
-from app.models.token import RefreshToken
+from app.models.token import Token, RefreshToken
 from app.services import auth_service
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -62,3 +62,14 @@ async def logout(request: RefreshToken):
         "user": result['user_id'],
         "message": "Logged Out Successfully"
     }
+
+@router.post("/refresh", response_model=Token)
+async def refresh_token(request: RefreshToken):
+    """Create new access token by sending the refresh token"""
+    try:
+        return auth_service.refresh_token(request)
+    except ValueError as e:
+        # All ValueErrors become 401 Unauthorized
+        raise HTTPException(status_code=401, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Failed to refresh token")
