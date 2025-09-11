@@ -47,10 +47,10 @@ def test_login_successful(test_user_data, cleanup_test_user):
     
     # Assertions for successful login
     assert logged_in_user is not None
-    assert logged_in_user['email'] == "test_auth@example.com"
-    assert logged_in_user['full_name'] == "Test User"
+    assert logged_in_user.email == "test_auth@example.com"
+    assert logged_in_user.full_name == "Test User"
     assert 'password_hash' not in logged_in_user  # Password should not be returned
-    assert 'id' in logged_in_user  # User ID should be present
+    assert logged_in_user.user_name == "test_user"
 
 def test_login_wrong_password(test_user_data, cleanup_test_user):
     """Test login failure with wrong password"""
