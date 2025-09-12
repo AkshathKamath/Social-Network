@@ -8,7 +8,7 @@ load_dotenv()
 class Settings(BaseSettings):
     ## app
     app_name: str = "Follow Service"
-    port: int = 5000
+    port: int = 4001
 
     ## supabase
     supabase_url: str

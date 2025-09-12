@@ -41,5 +41,5 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     
     return {
         "user_id": payload.get("user_id"),
-        "email": payload.get("email")
+        "user_name": payload.get("user_name")
     }
