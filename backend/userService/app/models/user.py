@@ -18,6 +18,7 @@ class UserLogin(BaseModel):
 class User(BaseModel):
     access_token: Optional[str] = None
     refresh_token: Optional[str] = None
+    user_id: str
     email: EmailStr
     full_name: str
     user_name: str

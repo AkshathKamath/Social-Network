@@ -25,6 +25,7 @@ def register_user(user_data: UserRegister) -> User:
     if result.data:
         user = result.data[0]
         return User(
+            user_id=user['id'],
             email=user['email'],
             full_name=user['full_name'],
             user_name=user['user_name']
@@ -73,6 +74,7 @@ def login_user(login_data: UserLogin) -> User:
     return User(
         access_token=access_token,
         refresh_token=refresh_token,
+        user_id =user['id'],
         email=user['email'],
         full_name=user['full_name'],
         user_name=user['user_name']
