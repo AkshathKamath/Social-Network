@@ -1,7 +1,7 @@
 # app/api/follows.py
 from fastapi import APIRouter, Depends, HTTPException, Query
 from app.core.dependencies import get_current_user
-from app.services import follow_service
+from app.services.follow_service import follow_service_object as follow_service
 from app.models.follow import FollowResponse, FollowersResponse, FollowingResponse, RelationshipResponse
 from typing import Dict
 
