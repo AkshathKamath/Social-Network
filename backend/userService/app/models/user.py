@@ -21,3 +21,11 @@ class User(BaseModel):
     user_id: str
     full_name: str
     user_name: str
+    image_url: Optional[str] = None
+
+class Image(BaseModel):
+    image_data: bytes
+    file_name: str
+
+class Message(BaseModel):
+    message: str

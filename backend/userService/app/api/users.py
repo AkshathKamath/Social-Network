@@ -1,7 +1,9 @@
 # app/api/users.py (new file)
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from app.models.user import Image, Message
 from app.core.dependencies import get_current_user
 from app.db.database import get_db
+from app.services.user_service import user_obj
 from typing import Dict
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -70,3 +72,14 @@ async def delete_my_account(current_user: Dict = Depends(get_current_user)):
     result = db.table('users').delete().eq('id', current_user['user_id']).execute()
     
     return {"message": "Account deleted successfully"}
+
+@router.put("/profile_image", response_model=Message)
+async def update_profile_image(file: UploadFile = File(...), current_user: Dict = Depends(get_current_user)):
+
+    file_data = await file.read()
+    file_extension = file.filename.split('.')[-1]
+    filename = f"profile_picture.{file_extension}"
+
+    user_id = current_user['user_id']
+
+    return user_obj.upload_profile_image(Image(image_data=file_data, file_name=filename), user_id)

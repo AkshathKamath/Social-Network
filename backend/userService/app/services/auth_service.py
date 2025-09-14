@@ -79,7 +79,8 @@ class AuthService():
             ),
             user_id=user['id'],
             full_name=user['full_name'],
-            user_name=user['user_name']
+            user_name=user['user_name'],
+            image_url=user['profile_image_url']
         )
 
     def logout_user(self, request: RefreshToken) -> LogoutMessage:
