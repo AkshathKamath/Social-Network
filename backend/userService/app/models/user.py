@@ -3,6 +3,7 @@ from pydantic import BaseModel, EmailStr, Field
 from datetime import date
 from typing import Optional
 from uuid import UUID
+from .token import Token
 
 class UserRegister(BaseModel):
     email: EmailStr
@@ -16,9 +17,7 @@ class UserLogin(BaseModel):
     password: str
 
 class User(BaseModel):
-    access_token: Optional[str] = None
-    refresh_token: Optional[str] = None
+    token: Optional[Token] = None
     user_id: str
-    email: EmailStr
     full_name: str
     user_name: str

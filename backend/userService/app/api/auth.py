@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from app.db.database import get_db
 from app.models.user import User, UserRegister, UserLogin
 from app.models.token import Token, RefreshToken, LogoutMessage
-from app.services import auth_service
+from app.services.auth_service import auth_obj as auth_service
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
