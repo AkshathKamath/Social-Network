@@ -19,7 +19,9 @@ class UserService():
                     user_id=user_id,
                     full_name=user['full_name'],
                     user_name=user['user_name'],
-                    image_url=user['profile_image_url']
+                    image_url=user['profile_image_url'],
+                    followers_count=int(user.get('followers_count', 0)),
+                    following_count=int(user.get('following_count', 0))
                 )
 
             ## If not in cache, get from DB
@@ -27,15 +29,16 @@ class UserService():
             result = self.db.table('users').select('full_name, user_name, followers_count, following_count, profile_image_url').eq('id', user_id).execute()
             if result.data:
                 user = result.data[0]
-                user.pop('follower_count', None)
-                user.pop('following_count', None)
                 # Store in cache for future requests
+                print("Storing in cache")
                 self.redis.hset(f"user:{user_id}", mapping=user)
                 return  User(
                     user_id=user_id,
                     full_name=user['full_name'],
                     user_name=user['user_name'],
-                    image_url=user['profile_image_url']
+                    image_url=user['profile_image_url'],
+                    followers_count=int(user.get('followers_count', 0)),
+                    following_count=int(user.get('following_count', 0))
                 )
 
         except Exception as e:
@@ -54,7 +57,9 @@ class UserService():
                     user_id=user['id'],
                     full_name=user['full_name'],
                     user_name=user['user_name'],
-                    image_url=user['profile_image_url']
+                    image_url=user['profile_image_url'],
+                    followers_count=int(user.get('followers_count', 0)),
+                    following_count=int(user.get('following_count', 0))
                 )
         except Exception as e:
             raise Exception(f"Failed to update user: {user_id} due to {str(e)}")

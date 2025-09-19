@@ -26,6 +26,8 @@ class User(BaseModel):
     full_name: str
     user_name: str
     image_url: Optional[str] = None
+    followers_count: Optional[int] = 0
+    following_count: Optional[int] = 0
 
 class Image(BaseModel):
     image_data: bytes
