@@ -26,6 +26,7 @@ class FollowService():
         
         # Invalidate the cache
         print("User deleted from cache") if self.redis.delete(f"user:{follower_id}") else None
+        #
         
         # Create follow relationship
         result = self.db.table('follows').insert({
