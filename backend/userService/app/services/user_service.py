@@ -1,18 +1,37 @@
 from app.db.database import get_db
+from app.db.cache import get_redis
 from app.models.user import User, UserUpdate, Image, Message
 
 class UserService():
     def __init__(self):
         self.db = get_db()
+        self.redis = get_redis()
         self.bucket_name = "user_images"
     
     def get_user(self, user_id: str) -> User:
         try:
-            result = self.db.table('users').select("*").eq('id', user_id).execute()
+            ## Try to get from cache first
+            if self.redis.exists(f"user:{user_id}"):
+                print("Fetching from cache")
+                user = self.redis.hgetall(f"user:{user_id}")
+                user = {k.decode(): v.decode() for k, v in user.items()} # Decode from bytes -> string
+                return User(
+                    user_id=user_id,
+                    full_name=user['full_name'],
+                    user_name=user['user_name'],
+                    image_url=user['profile_image_url']
+                )
+
+            ## If not in cache, get from DB
+            print("Fetching from DB")
+            result = self.db.table('users').select('full_name, user_name, followers_count, following_count, profile_image_url').eq('id', user_id).execute()
             if result.data:
                 user = result.data[0]
-                user.pop('password_hash', None)
-                return User(
+                user.pop('follower_count', None)
+                user.pop('following_count', None)
+                # Store in cache for future requests
+                self.redis.hset(f"user:{user_id}", mapping=user)
+                return  User(
                     user_id=user_id,
                     full_name=user['full_name'],
                     user_name=user['user_name'],
@@ -29,6 +48,8 @@ class UserService():
             result = self.db.table('users').update(updated_user).eq('id', user_id).execute()
             if result:
                 user = result.data[0]
+                ## Invalidate the cache
+                print("Deleted from cache") if self.redis.delete(f"user:{user_id}") else None
                 return User(
                     user_id=user['id'],
                     full_name=user['full_name'],
@@ -43,6 +64,8 @@ class UserService():
         try:
             result = self.db.table('users').delete().eq('id', user_id).execute()
             if bool(result):
+                # Invalidate the cache
+                print("Deleted from cache") if self.redis.delete(f"user:{user_id}") else None
                 return Message(message=f"User: {user_id} deleted successfully")
         except Exception as e:
             raise Exception(f"Failed to delete user: {user_id} due to {str(e)}")

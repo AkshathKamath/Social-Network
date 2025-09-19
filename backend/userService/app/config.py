@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     supabase_url: str
     supabase_service_key: str
 
+    ## redis
+    redis_url: str
+
     ## jwt
     jwt_secret_key: str
     jwt_algorithm: str = "HS256"
