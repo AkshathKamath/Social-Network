@@ -1,11 +1,13 @@
 # app/services/follow_service.py
 from app.db.database import get_db
+from app.db.cache import get_redis
 from app.models.follow import FollowResponse, FollowersResponse, FollowingResponse, User
 from typing import Optional, List, Dict
 
 class FollowService():
     def __init__(self):
         self.db = get_db()
+        self.redis = get_redis()
 
     def follow_user(self, follower_id: str, following_id: str) -> FollowResponse:
         """Follow a user"""
@@ -22,6 +24,9 @@ class FollowService():
         if existing.data:
             raise ValueError("Already following this user")
         
+        # Invalidate the cache
+        print("User deleted from cache") if self.redis.delete(f"user:{follower_id}") else None
+        
         # Create follow relationship
         result = self.db.table('follows').insert({
             'follower_id': follower_id,
@@ -36,6 +41,9 @@ class FollowService():
 
     def unfollow_user(self, follower_id: str, following_id: str) -> FollowResponse:
         """Unfollow a user"""
+
+        # Invalidate the cache
+        print("User deleted from cache") if self.redis.delete(f"user:{follower_id}") else None
         
         # Delete follow relationship
         result = self.db.table('follows').delete().eq(
@@ -95,23 +103,5 @@ class FollowService():
         return FollowingResponse(
             following=following
         )
-
-    # def check_relationship(self, user_id: str, target_id: str) -> Dict:
-    #     """Check follow relationship between two users"""
-        
-    #     # Check if user follows target
-    #     following = self.db.table('follows').select('id').eq(
-    #         'follower_id', user_id
-    #     ).eq('following_id', target_id).execute()
-        
-    #     # Check if target follows user
-    #     followed_by = self.db.table('follows').select('id').eq(
-    #         'follower_id', target_id
-    #     ).eq('following_id', user_id).execute()
-        
-    #     return {
-    #         'following': bool(following.data),
-    #         'followed_by': bool(followed_by.data)
-    #     }
 
 follow_service_object = FollowService()
