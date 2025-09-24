@@ -1,9 +1,7 @@
 # app/config.py
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
-import os
 
-# Explicitly load .env file BEFORE creating Settings
 load_dotenv()
 
 class Settings(BaseSettings):
