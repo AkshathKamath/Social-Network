@@ -11,6 +11,10 @@ class Settings(BaseSettings):
     app_name: str = "Post Service"
     debug: bool = True
 
+    # supabase
+    supabase_url: str
+    supabase_service_key: str
+
     ## redis
     redis_url: str
 
