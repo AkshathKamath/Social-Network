@@ -2,6 +2,7 @@ from app.db.database import get_db
 from app.db.mongo import get_mongo
 from app.models.feed import Post
 from typing import List
+from datetime import datetime
 
 class FeedService():
     def __init__(self):
@@ -21,15 +22,18 @@ class FeedService():
         except Exception as e:
             raise Exception(f"Failed to fetch list of users following: {str(e)}")
     
-    def generate_feed(self, user_id: str) -> List[Post]:
+    def generate_feed(self, user_id: str, timestamp: datetime = datetime.now()) -> List[Post]:
         try:
             followingUsers = self._get_following(user_id=user_id)
             if not followingUsers:
                 return []
-            cursor = self.collection.find(
-            {"user_id": {"$in": followingUsers}},
-            sort=[("created_at", -1)]
-            )
+            query = {
+                "user_id": {"$in": followingUsers},
+                "created_at": {"$lt": timestamp}
+            }
+            cursor = self.collection.find(query)\
+            .sort("created_at", -1)\
+            .limit(5)
             posts = []
             for doc in cursor:
                     doc['_id'] = str(doc['_id'])
