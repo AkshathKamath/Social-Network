@@ -11,7 +11,7 @@ class Post(BaseModel):
     user_id: str
     post_url: str
     caption: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime
 
 class PostUploadResponse(BaseModel):
     post_id: str

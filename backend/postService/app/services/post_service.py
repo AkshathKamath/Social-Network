@@ -1,19 +1,52 @@
 from app.db.database import get_db
 from app.db.mongo import get_mongo
 from app.models.post import Post, PostData, PostUploadResponse, PostFetchResponse, PostDeleteResponse
+
 import uuid
 from typing import List
 from bson import ObjectId
+import logging
+from datetime import datetime
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
+
 
 class PostService:
     def __init__(self):
         self.db = get_db()
-        self.mongo = get_mongo()
+        mongo = get_mongo()
         self.bucket_name = "user_images"
-        self.database = self.mongo['db1']
-        self.collection = self.database['posts']
+        mognoDatabase = mongo['db1']
+        self.postsCollection = mognoDatabase['posts']
+        self.precomputefeedCollection = mognoDatabase['precomputefeed']
     
-    def upload_post(self, postData: PostData, user_id: str) -> PostUploadResponse:
+    def _get_followers(self, user_id: str) -> List[str]:
+        try:
+            result = self.db.table('follows').select('follower_id').eq('following_id', user_id).execute()
+            return [user['follower_id'] for user in (result.data or [])]
+        except Exception as e:
+            logger.error(f"Couldn't get followers for {user_id}: {str(e)}")
+            raise
+    
+    def _push_post_to_followers(self, user_id: str, post_id: str, created_at: datetime, followers: List[str]) -> None:
+        try:
+           documents = [
+                {
+                     "user_id": follower,
+                     "post_id": ObjectId(post_id),
+                     "created_at": created_at
+                }
+                for follower in followers
+           ]
+           if documents:
+                result = self.precomputefeedCollection.insert_many(documents)
+           return
+        except Exception as e:
+            logger.error(f"Couldn't push post to all folowers for {user_id}: {str(e)}")
+            raise
+    
+    def upload_post(self, postData: PostData, user_id: str, timestamp: datetime = None) -> PostUploadResponse:
         try:
             file_name = uuid.uuid4().hex
             file_path = f"{user_id}/{file_name}"
@@ -24,12 +57,17 @@ class PostService:
             )
             if uploadToS3:
                 post_url = self.db.storage.from_(self.bucket_name).get_public_url(file_path)
+                timestamp = timestamp or datetime.now()
                 post = Post(
                     user_id=user_id,
                     post_url=post_url,
-                    caption=postData.caption
+                    caption=postData.caption,
+                    created_at=timestamp
                 )
-                result = self.collection.insert_one(post.model_dump())
+                result = self.postsCollection.insert_one(post.model_dump())
+                followers = self._get_followers(user_id)
+                self._push_post_to_followers(user_id, str(result.inserted_id), timestamp, followers)
+                logger.info("New post pushed to feed table for followers successfully")
                 return PostUploadResponse(
                     post_id=str(result.inserted_id),
                     message="Post Created Successfully"
