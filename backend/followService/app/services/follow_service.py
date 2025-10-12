@@ -7,7 +7,7 @@ from typing import Optional, List, Dict
 class FollowService():
     def __init__(self):
         self.db = get_db()
-        self.redis = get_redis()
+        # self.redis = get_redis()
 
     def follow_user(self, follower_id: str, following_id: str) -> FollowResponse:
         """Follow a user"""
@@ -24,8 +24,8 @@ class FollowService():
         if existing.data:
             raise ValueError("Already following this user")
         
-        # Invalidate the cache
-        print("User deleted from cache") if self.redis.delete(f"user:{follower_id}") else None
+        # # Invalidate the cache
+        # print("User deleted from cache") if self.redis.delete(f"user:{follower_id}") else None
         #
         
         # Create follow relationship
