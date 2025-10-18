@@ -2,75 +2,66 @@ from app.db.database import get_db
 from app.core.security import hash_password, verify_password, create_access_token, create_refresh_token
 from app.models.user import UserRegister, UserLogin, User
 from app.models.token import Token, RefreshToken, LogoutMessage
+from app.logger import setup_logger
+
 from typing import Optional, Dict
 from datetime import datetime, timedelta, timezone
+
+logger = setup_logger(__name__)
 
 class AuthService():
     def __init__(self):
         self.db = get_db()
 
     def register_user(self, user_data: UserRegister) -> User:
-        """Register a new user"""  
+        """Register a new user"""
+        logger.info(f"Creating a new user for: {user_data.full_name}")
         # Check if email already exists
         existing = self.db.table('users').select("id").eq('email', user_data.email).execute()
         if existing.data:
+            logger.error(f"Email already registered for: {user_data.email}")
             raise ValueError("Email already registered")
-        
         # Prepare user data with hashed password
         user_dict = user_data.model_dump()
         user_dict['password_hash'] = hash_password(user_dict.pop('password'))
         user_dict['date_of_birth'] = str(user_dict['date_of_birth'])
-        
         # Insert into database
         result = self.db.table('users').insert(user_dict).execute()
-        
         if result.data:
             user = result.data[0]
+            logger.info(f"User created successfully: {user['id']}")
             return User(
                 token=None,
                 user_id=user['id'],
                 full_name=user['full_name'],
                 user_name=user['user_name']
             )
-        
         raise Exception("Failed to create user")
 
     def login_user(self, login_data: UserLogin) -> User:
         """Authenticate user and return user data if successful"""
-        # Get user by email
+        logger.info(f"Trying to login user: {login_data.email}")
         result = self.db.table('users').select("*").eq('email', login_data.email).execute()
-        
         if not result.data:
-            return None  # User not found
-        
+            logger.error(f"User does not exist for {login_data.email}")
+            return None 
         user = result.data[0]
-        
-        # Verify password
         if not verify_password(login_data.password, user['password_hash']):
-            return None  # Wrong password
-        
+            logger.error(f"Wrong password for {login_data.email}")
+            return None
         token_data = {
                 "user_id": user['id'],
                 "user_name": user['user_name']
             }
-            
-            # Generate tokens
         access_token = create_access_token(token_data)
         refresh_token = create_refresh_token(token_data)
-        
-        # Store refresh token in database
         expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-        
         self.db.table('refresh_tokens').insert({
             "user_id": user['id'],
             "token": refresh_token,
             "expires_at": expires_at.isoformat()
         }).execute()
-        
-        # Remove sensitive data
-        user.pop('password_hash', None)
-        
-        # Return tokens and user info
+        logger.info(f"Generated access token and stored refresh tokens for user id: {user['id']} and email: {login_data.email} and login successful")
         return User(
             token=Token(
                 access_token=access_token,
