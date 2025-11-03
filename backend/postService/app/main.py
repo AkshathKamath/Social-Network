@@ -15,7 +15,7 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Application starting...")
     try:
-        MongoDBConnection.initialize()
+        await MongoDBConnection.initialize()
         SupabaseConnection.initialize()
         logger.info("All connections initialized")
     except Exception as e:
@@ -51,7 +51,7 @@ app = FastAPI(
 
 # Include routers
 from app.api import posts
-app.include_router(posts.router, prefix="/api/v1")
+app.include_router(posts.router)
 
 @app.get("/")
 def root():
@@ -60,7 +60,7 @@ def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    mongo_healthy = MongoDBConnection.health_check()
+    mongo_healthy = await MongoDBConnection.health_check()
     supabase_healthy = SupabaseConnection.health_check()
     if not mongo_healthy:
         return {"status": "unhealthy", "mongodb": "down"}, 503
