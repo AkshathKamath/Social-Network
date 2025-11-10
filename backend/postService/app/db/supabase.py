@@ -1,11 +1,12 @@
 import logging
 from typing import Optional
-from supabase import create_client, Client, ClientOptions
-from httpx import Limits
+from supabase import create_client, Client
+from concurrent.futures import ThreadPoolExecutor
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+_storage_executor = ThreadPoolExecutor(max_workers=10)
 
 class SupabaseConnection:
     """Singleton Supabase client with optimized HTTP connection pooling"""
@@ -20,28 +21,14 @@ class SupabaseConnection:
         
         try:
             logger.info("Initializing Supabase connection")
-
-            options = ClientOptions(
-                # HTTP connection pool settings
-                postgrest_client_timeout=30,
-                storage_client_timeout=30,
-                schema="public",
-                headers={},
-                auto_refresh_token=True,
-                persist_session=True,
-                # Custom httpx client settings
-                flow_type="implicit",
-            )
             
-            # Create client with custom HTTP limits for connection pooling
             cls._client = create_client(
                 settings.supabase_url,
                 settings.supabase_service_key,
-                options=options
             )
             
             # Test connection with a simple query
-            cls._client.table('users').select('*').limit(1).execute()
+            cls._client.storage.list_buckets()
             logger.info("Supabase connected successfully")
             cls._initialized = True
             
@@ -75,7 +62,7 @@ class SupabaseConnection:
             if cls._client is None:
                 return False
             # Simple query to test connection
-            cls._client.table('users').select('count').limit(1).execute()
+            cls._client.storage.list_buckets()
             return True
         except Exception as e:
             logger.error(f"Health check failed: {str(e)}")

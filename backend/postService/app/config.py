@@ -14,6 +14,12 @@ class Settings(BaseSettings):
     # supabase
     supabase_url: str
     supabase_service_key: str
+    supabase_storage_bucket: str = "user_images"
+
+    #postgres
+    postgres_url: str
+    postgres_pool_size: int = 20
+    postgres_max_overflow: int = 10
 
     ## redis
     redis_url: str

@@ -5,6 +5,7 @@ import logging
 
 from app.db.mongo import MongoDBConnection
 from app.db.supabase import SupabaseConnection
+from app.db.postgres import PostgreSQLConnection
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -15,6 +16,7 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Application starting...")
     try:
+        await PostgreSQLConnection.initialize()
         await MongoDBConnection.initialize()
         SupabaseConnection.initialize()
         logger.info("All connections initialized")
@@ -27,7 +29,8 @@ async def lifespan(app: FastAPI):
     # Shutdown
     logger.info("Application shutting down...")
     try:
-        MongoDBConnection.close()
+        await PostgreSQLConnection.close()
+        await MongoDBConnection.close()
         SupabaseConnection.close()
         logger.info("All connections closed")
     except Exception as e:
@@ -60,8 +63,11 @@ def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
+    postgres_healthy = await PostgreSQLConnection.health_check()
     mongo_healthy = await MongoDBConnection.health_check()
     supabase_healthy = SupabaseConnection.health_check()
+    if not postgres_healthy:
+        return {"status": "unhealthy", "postgres": "down"}, 503
     if not mongo_healthy:
         return {"status": "unhealthy", "mongodb": "down"}, 503
     if not supabase_healthy:

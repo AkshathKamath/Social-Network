@@ -1,6 +1,7 @@
-from app.db.supabase import get_supabase
 from app.db.mongo import get_mongo
+from app.db.postgres import get_db_session
 from app.models.post import Post, PostData, PostUploadResponse, PostFetchResponse, PostDeleteResponse
+from app.services.storage_service import StorageService, get_storage_service
 
 import uuid
 from typing import List
@@ -14,23 +15,36 @@ import logging
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 import asyncio
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, delete
+from fastapi import Depends
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
-executor = ThreadPoolExecutor(max_workers=10)
 
 
 class PostService:
 ## CONSTRUCTOR----------------------------------------------------------------------
 
-    def __init__(self):
-        self._supabase: Client = get_supabase()
-        self.bucket_name = "user_images"
+    def __init__(
+            self,
+            storage_service: StorageService,
+            db_session: AsyncSession
+    ):
+        self._db_session = db_session
 
         self._mongo: AsyncIOMotorClient = get_mongo()
         self._mongo_db = self._mongo['db1']
         self._posts_collection: Collection = self._mongo_db['posts']
         self._precompute_feed_collection: Collection = self._mongo_db['precomputefeed']
+
+        self._storage_service = storage_service
+
+        self._saga_state = {
+            'blob_url': None,
+            'post_id': None,
+            'feed_pushed': False
+        }
     
 ## HELPER FUNCTIONS-----------------------------------------------------------------
     
@@ -44,15 +58,10 @@ class PostService:
         """
         try:
             logger.debug(f"Fetching followers for user {user_id}")
-            loop = asyncio.get_running_loop()
-            result = await loop.run_in_executor(
-                executor,
-                lambda: self._supabase.table('follows')
-                    .select('follower_id')
-                    .eq('following_id', user_id)
-                    .execute()
-            )
-            followers = [user['follower_id'] for user in (result.data or [])]
+            from app.models.db_models import Follow
+            query = select(Follow.follower_id).where(Follow.following_id == user_id)
+            result = await self._db_session.execute(query)
+            followers = [row[0] for row in result.fetchall()]
             logger.info(f"Found {len(followers)} followers for user {user_id}")
             return followers
         except Exception as e:
@@ -65,24 +74,14 @@ class PostService:
             user_id: str, 
             file_extension: str
     ) -> str:
-        """Handle upload image to Supabase storage. Supabase client is sync and blocking operation, so handoff the upload of the image to a separate thread and keep the event loop free to execute other coroutines"""
         try:
             file_name = f"{uuid.uuid4().hex}.{file_extension}"
             file_path = f"{user_id}/{file_name}"
-            logger.info(f"Uploading file to storage: {file_path}")
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(
-                executor,
-                lambda: self._supabase.storage
-                    .from_(self.bucket_name)
-                    .upload(
-                        path=file_path,
-                        file=file_data,
-                        file_options={"content-type": f"image/{file_extension}"}
-                    )
+            blob_url = self._storage_service.upload_to_storage(
+                file_data=file_data,
+                file_path=file_path,
+                file_extension=file_extension
             )
-            blob_url = self._supabase.storage.from_(self.bucket_name).get_public_url(file_path)
-            logger.info(f"File uploaded successfully: {blob_url}")
             return blob_url
         except Exception as e:
             logger.error(f"Failed to upload to storage: {str(e)}", exc_info=True)
@@ -144,8 +143,74 @@ class PostService:
             except PyMongoError as e:
                 logger.error(f"Failed to push to feeds: {str(e)}", exc_info=True)
                 raise RuntimeError(f"Feed push failed: {str(e)}")
+    
+    async def _delete_post_metadata(
+            self,
+            post_id: str,
+            user_id: str
+    ) -> str:
+        """
+        Delete post metadata from MongoDB
+        """
+        try:
+            logger.info(f"Deleting post metadata {post_id} for user {user_id}")
+            result = await self._posts_collection.delete_one({
+                "_id": ObjectId(post_id),
+                "user_id": user_id
+            })
+            if result.deleted_count == 0:
+                raise ValueError(f"Post {post_id} not found or unauthorized")
+            logger.info(f"Post metadata {post_id} deleted successfully")
+            return result['post_url']
+        except ValueError:
+            raise
+        except PyMongoError as e:
+            logger.error(f"MongoDB error deleting post: {str(e)}", exc_info=True)
+            raise RuntimeError(f"Database error: {str(e)}"
+    )
 
-##----------------------------------------------------------------------------------
+    async def _delete_post_from_storage(
+            self,
+            post_url: str
+    ) -> None:
+        """
+        Delete post from Supabase storage
+        """
+        try:
+            file_path_parts = post_url.split('/')
+            file_name = file_path_parts[-1].split('?')[0]
+            user_id = file_path_parts[-2]
+            full_path = f"{user_id}/{file_name}"
+            await self._storage_service.delete_from_storage(
+                file_path=full_path
+            )
+            logger.info(f"Post deleted from storage: {full_path}")
+        except Exception as e:
+            logger.error(f"Failed to delete from storage: {str(e)}", exc_info=True)
+            raise RuntimeError(f"Storage delete failed: {str(e)}")
+    
+    async def _remove_post_from_feeds(
+            self,
+            post_id: str
+    ) -> None:
+        """
+        Remove post from all followers' feeds
+        """
+        try:
+            logger.info(f"Removing post {post_id} from all feeds")
+            result = await self._precompute_feed_collection.delete_many({
+                "post_id": ObjectId(post_id)
+            })
+            logger.info(f"Post {post_id} removed from {result.deleted_count} feeds successfully")
+        except PyMongoError as e:
+            logger.error(f"Failed to remove post from feeds: {str(e)}", exc_info=True)
+            raise RuntimeError(f"Feed removal failed: {str(e)}")
+        
+
+## COMPENSATION FUNCTIONS-------------------------------------------------------------
+
+
+
 
 ## MAIN FUNCTIONS-------------------------------------------------------------------
 
@@ -225,30 +290,21 @@ class PostService:
         try:
             logger.info(f"Deleting post {post_id} for user {user_id}")
             # STEP 1: Remove from posts collection
-            doc = await self._posts_collection.find_one_and_delete({
-                "_id": ObjectId(post_id),
-                "user_id": user_id
-            })
-            if not doc:
-                raise ValueError(f"Post {post_id} not found or unauthorized")
-            # STEP 2: Remove from storage
-            file_path_parts = doc['post_url'].split('/')
-            file_name = file_path_parts[-1].split('?')[0]
-            full_path = f"{user_id}/{file_name}"
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                executor,
-                lambda: self._supabase.storage
-                    .from_(self.bucket_name)
-                    .remove([full_path])
+            post_url = await self._delete_post_metadata(
+                post_id=post_id,
+                user_id=user_id
+            )
+            # STEP 2: Delete from storage
+            await self._delete_post_from_storage(
+                post_url=post_url
             )
             # STEP 3: Remove from feeds table
-            await self._precompute_feed_collection.delete_many({
-                "post_id": ObjectId(post_id)
-            })
+            await self._remove_post_from_feeds(
+                post_id=post_id
+            )
             logger.info(f"Post {post_id} deleted successfully")
             return PostDeleteResponse(
-                message=f"Post {post_id} deleted successfully"
+                message="Post Deleted Successfully"
             )
         except ValueError:
             raise
@@ -258,10 +314,11 @@ class PostService:
 
 ##----------------------------------------------------------------------------------
 
-## COMPENSATION FUNCTIONS-------------------------------------------------------------
-
 
 # Factory pattern function
-def get_post_service() -> PostService:
+def get_post_service(
+    db_session: AsyncSession = Depends(get_db_session),
+    storage_service: StorageService = Depends(get_storage_service)
+) -> PostService:
     """Create new instance per request"""
-    return PostService()
+    return PostService(db_session, storage_service)
